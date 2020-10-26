@@ -1,0 +1,625 @@
+---
+title: "Project Part 1: Part 1 - Exploration"
+output: pdf_document
+author: "Savannah McCoy"
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggpubr)
+library(dbplyr)
+library(doBy)
+library(extrafont)
+library(ggplot2)
+library(reshape2)
+library(hexbin)
+```
+
+
+## Project Part 1 - Exploration
+
+
+# MODIFYING IS_POPULAR BOOLEAN LIMIT
+```{r 1.1}
+
+df <- read.csv("final_new_data.csv", sep=',')
+df$is_popular <- ifelse(df$song_popularity >= 70, 1, 0)
+df_pop <- subset(df, is_popular == 1) # 4541/139606 = 0.032527 = 3.25%
+
+```
+
+
+# CHOOSING A HOLDOUT SET 
+```{r 1.2}
+set.seed(1)
+
+smp_size <- floor(0.71631 * nrow(df))
+train_ind <- sample(seq_len(nrow(df)), size = smp_size)
+
+df_train <- df[train_ind, ]
+df_test <- df[-train_ind, ]
+
+```
+
+
+
+# PLOTTING Song Popularity Density
+```{r 2.2}
+
+plot_theme <- theme(
+                    panel.background = element_rect(fill = "#575757",
+                                                  colour = "#575757"),
+                    panel.grid.major = element_line(size = 0.25, linetype = 'dotted',
+                                                  colour = "black"),
+                    panel.grid.minor = element_line(size = 0.25, linetype = 'dotted',
+                                                  colour = "black"),
+                    plot.title = element_text(hjust = 0.5, 
+                                              family="Roboto Mono", 
+                                              size = 12, 
+                                              margin=margin(0,0,5,0)),
+                    text = element_text(colour="white", 
+                                        family="Roboto Mono", 
+                                        size = 10),
+                    axis.text = element_text(colour="white"),
+                    plot.background = element_rect(fill = "black")
+                    )
+
+
+p <- ggplot(df_train, aes(x=song_popularity)) + 
+            geom_density(fill="#42db00",) +
+            plot_theme
+
+
+
+# Add mean line
+g <- p + geom_vline(aes(xintercept=mean(x=song_popularity)), 
+                    color="#f673a2", 
+                    linetype="dashed", 
+                    alpha=1,
+                    size=1)
+
+ggsave("plot1.png", plot = g, width = 6, height = 4, dpi = 300, units = "in", device='png')
+
+```
+
+
+
+# PLOTTING Median & mean Song Popularity
+```{r 2.3}
+
+plot_theme <- theme(
+                    panel.background = element_rect(fill = "#575757",
+                                                  colour = "#575757"),
+                    panel.grid.major = element_line(size = 0.25, linetype = 'dotted',
+                                                  colour = "black"),
+                    panel.grid.minor = element_line(size = 0.25, linetype = 'dotted',
+                                                  colour = "black"),
+                    plot.title = element_text(hjust = 0.5, 
+                                              family="Roboto Mono", 
+                                              size = 12, 
+                                              margin=margin(0,0,5,0)),
+                    text = element_text(colour="white", 
+                                        family="Roboto Mono", 
+                                        size = 10),
+                    axis.text = element_text(colour="white"),
+                    plot.background = element_rect(fill = "black"),
+                    legend.position="right",
+                    legend.key = element_rect(fill = "transparent", colour = "transparent"),
+                    legend.background = element_blank())
+
+
+c <- summaryBy(song_popularity ~ year, data = df_train, FUN = list(mean, max, min, median, sd))
+myvars <- c("song_popularity.mean", "song_popularity.median", "year")
+d <- c[myvars]
+dd <-  melt(d, id.vars="year")
+
+
+m <- ggplot(dd, aes(year, value, col=variable)) + geom_line(size = 1.2) +
+        labs(
+           x = "Year",
+           y = "Popularity Score") +
+      scale_color_manual(labels = c("Mean", "Median"), values = c("#42db00", "#f7e22e")) +
+      scale_x_continuous(breaks = scales::pretty_breaks(n = 10)) +
+      plot_theme
+
+ggsave("plot2.png", plot = m, width = 6, height = 4, dpi = 300, units = "in", device='png')
+
+```
+
+
+# Distribution of Audio Features
+```{r 5}
+
+plot_theme <- theme(
+                    panel.background = element_rect(fill = "#575757",
+                                                  colour = "#575757"),
+                    panel.grid.major = element_line(size = 0.25, linetype = 'dotted',
+                                                  colour = "#575757"),
+                    panel.grid.minor = element_line(size = 0.25, linetype = 'dotted',
+                                                  colour = "#575757"),
+                    plot.title = element_text(hjust = 0.5, 
+                                              family="Roboto Mono", 
+                                              size = 12, 
+                                              margin=margin(0,0,5,0)),
+                    text = element_text(colour="white", 
+                                        family="Roboto Mono", 
+                                        size = 5),
+                    axis.text = element_text(colour="white"),
+                    plot.background = element_rect(fill = "black")
+                    )
+
+df_train_sub2 <- subset(df_train, duration_ms < 1000000)
+q <- ggplot(df_train_sub2, aes(x=duration_ms)) + geom_histogram(binwidth = 50000, fill="white",) + plot_theme
+
+i <- ggplot(df_train, aes(x=time_signature)) + geom_histogram(binwidth = 0.1, fill="white",) + plot_theme
+w <- ggplot(df_train, aes(x=key)) + geom_histogram(binwidth = 0.5, fill="white",) + plot_theme +
+                      scale_x_continuous(breaks = scales::pretty_breaks(n = 11)) 
+
+df_train_sub3 <- subset(df_train, instrumentalness <= 0.000005)
+r <- ggplot(df_train_sub3, aes(x=instrumentalness)) + geom_density(fill="white", size = 0.1) + plot_theme
+
+df_train_sub4 <- subset(df_train, speechiness <= 0.25)
+s <- ggplot(df_train_sub4, aes(x=speechiness)) + geom_density(fill="white", size = 0.1) + plot_theme
+
+t <- ggplot(df_train, aes(x=danceability)) + geom_density(fill="white", size = 0.1) + plot_theme
+
+u <- ggplot(df_train, aes(x=loudness)) + geom_density(fill="white", size = 0.1) + plot_theme
+v <- ggplot(df_train, aes(x=energy)) + geom_density(fill="white", size = 0.1) + plot_theme
+x <- ggplot(df_train, aes(x=liveness)) + geom_density(fill="white", size = 0.1) + plot_theme
+
+y <- ggplot(df_train, aes(x=tempo)) + geom_density(fill="white", size = 0.1) + plot_theme
+z <- ggplot(df_train, aes(x=valence)) + geom_density(fill="white", size = 0.1) + plot_theme
+h <- ggplot(df_train, aes(x=acousticness)) + geom_density(fill="white", size = 0.1) + plot_theme
+
+
+gg <- ggarrange(r, s, q, i, v, x, t, h, y, z, u, w, 
+                align = "v", ncol = 3, nrow = 4)
+
+ggsave("plot3.png", plot = gg, width = 5, height = 3)
+
+# print(q)
+# print(i)
+# print(w)
+# print(r)
+# print(s)
+# print(t)
+# print(u)
+# print(v)
+# print(x)
+# print(y)
+# print(z)
+# print(h)
+
+```
+
+
+# Followers, Artist popularity distribution
+```{r 3}
+plot_theme <- theme(
+                    panel.background = element_rect(fill = "#575757",
+                                                  colour = "#575757"),
+                    panel.grid.major = element_line(size = 0.25, linetype = 'dotted',
+                                                  colour = "black"),
+                    panel.grid.minor = element_line(size = 0.25, linetype = 'dotted',
+                                                  colour = "black"),
+                    plot.title = element_text(hjust = 0.5, 
+                                              family="Roboto Mono", 
+                                              size = 12, 
+                                              margin=margin(0,0,5,0)),
+                    text = element_text(colour="white", 
+                                        family="Roboto Mono", 
+                                        size = 8),
+                    axis.text = element_text(colour="white"),
+                    plot.background = element_rect(fill = "black"))
+
+j <- ggplot(df_train, aes(x=primary_artist_popularity)) + 
+  geom_histogram(binwidth=3, fill="greenyellow",color="black", size=0.5) + 
+  plot_theme 
+
+
+# k <- ggplot(df_train, aes(x=primary_artist_followers)) + 
+#   geom_histogram(binwidth=300000,fill="greenyellow",color="black", size=0.25) +
+#   scale_x_continuous(breaks = scales::pretty_breaks(n = 10)) +
+#   plot_theme 
+
+
+# ggsave("plot7.png", plot = k, width = 8, height = 3)
+
+print(k)
+
+```
+
+```{r 7.1}
+
+k1 <- ggplot(df_train, aes(x=primary_artist_followers)) + 
+  geom_histogram(binwidth=300000,fill="greenyellow",color="black", size=0.25) +
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 10)) +
+  plot_theme1 
+
+k2 <- ggplot(df_train_sub1, aes(x=primary_artist_followers)) + 
+  geom_histogram(fill="greenyellow",color="black", size=0.25) +
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 5)) +
+  plot_theme1
+
+gp2 <- ggarrange(k1, k2, align = "h", ncol = 2, nrow = 1)
+ggsave("plot7-1.png", plot = gp2, width = 8, height = 3)
+
+```
+
+
+```{r 8}
+
+l <- ggplot(df_train, aes(x=primary_artist_popularity)) + 
+            geom_density(fill="lightgreen",) +
+            plot_theme +
+            geom_vline(aes(xintercept=mean(x=primary_artist_popularity)), 
+                    color="#ffcdd4", 
+                    linetype="dashed", 
+                    alpha=1,
+                    size=1)
+
+print(l)
+gp <- ggarrange(g, l, align = "h", ncol = 2, nrow = 1)
+ggsave("plot8.png", plot = gp, width = 8, height = 3)
+
+```
+
+# - Number of popular songs (by year)
+```{r 7}
+# df_train_sub <- subset(df_train, is_popular == 1)
+# oo <- count(df_train_sub, "year")
+# o <-ggplot(data=oo, aes(x=year, y=freq)) + 
+#   geom_bar(stat="identity", fill='violetred', color="black", size=0.25) + 
+#   plot_theme +
+#   scale_x_continuous(breaks = scales::pretty_breaks(n = 10)) +
+#   labs(x = "Year",
+#        y = "Count")
+# ggsave("plot9-1.png", plot = o, width = 7, height = 3)
+```
+
+
+## Correlations between features -- scatterplots for pairs of covariates -  Grouped based on the level of a categorical variable
+```{r 4}
+
+
+plot_theme1 <- theme(
+                    panel.background = element_rect(fill = "#575757",
+                                                  colour = "#575757"),
+                    panel.grid.major = element_line(size = 0.25, linetype = 'dotted',
+                                                  colour = "black"),
+                    panel.grid.minor = element_line(size = 0.25, linetype = 'dotted',
+                                                  colour = "black"),
+                    plot.title = element_text(hjust = 0.5,
+                                              family="Roboto Mono",
+                                              size = 9,
+                                              margin=margin(0,0,5,0)),
+                    text = element_text(colour="white",
+                                        family="Roboto Mono",
+                                        size = 8),
+                    axis.text = element_text(colour="white"),
+                    plot.background = element_rect(fill = "black"),
+                    legend.position="right",
+                    legend.key = element_rect(fill = "transparent", colour = "transparent"),
+                    legend.background = element_blank())
+
+plot_theme2 <- theme(
+                    panel.background = element_rect(fill = "#575757",
+                                                  colour = "#575757"),
+                    panel.grid.major = element_line(size = 0.25, linetype = 'dotted',
+                                                  colour = "transparent"),
+                    panel.grid.minor = element_line(size = 0.25, linetype = 'dotted',
+                                                  colour = "transparent"),
+                    plot.title = element_text(hjust = 0.5,
+                                              family="Roboto Mono",
+                                              size = 10,
+                                              margin=margin(0,0,5,0)),
+                    text = element_text(colour="white",
+                                        family="Roboto Mono",
+                                        size = 10),
+                    axis.text = element_text(colour="white"),
+                    plot.background = element_rect(fill = "black"),
+                    legend.position="right",
+                    legend.key = element_rect(fill = "transparent", colour = "transparent"),
+                    legend.background = element_blank())
+
+```
+
+
+
+```{r 4.1}
+a1a <- ggplot(df_train, aes(x=song_popularity, y=primary_artist_popularity, color=as.factor(isSingle))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#34eb74','white'), name = "is Single?", labels = c("No", "Yes"))
+
+a1b <- ggplot(df_train, aes(x=song_popularity, y=primary_artist_popularity, color=as.factor(hasFeature))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#34eb74','white'), name = "Has feature?", labels = c("No", "Yes"))
+
+a1c <- ggplot(df_train, aes(x=song_popularity, y=primary_artist_popularity, color=as.factor(explicit))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#34eb74','white'), name = "is Explicit?", labels = c("No", "Yes"))
+
+a1d <- ggplot(df_train, aes(x=song_popularity, y=primary_artist_popularity, color=as.factor(mode))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#34eb74','white'), name = "Mode")
+
+a1e <- ggplot(df_train, aes(x=song_popularity, y=primary_artist_popularity)) + geom_hex() + plot_theme2 +
+              scale_fill_gradient(limits=c(0,1000), breaks=seq(0, 1000, by=500), low = "#575757", high = "#34eb74")
+
+
+ggp <- ggarrange(a1e, ggarrange(a1a, a1b, a1c, a1d, align = "h", ncol = 2, nrow = 2) , align = "h", ncol = 1, nrow =2)
+ggsave("plot4-1.png", plot = ggp, width = 8, height = 12, bg = "transparent")
+
+```
+
+
+# PRIMARY ARTIST FOLLOWERS
+```{r 4.2}
+
+df_train_sub1 <- subset(df_train, primary_artist_followers <= 5000000)
+
+a2a <- ggplot(df_train_sub1, aes(x=song_popularity, y=primary_artist_followers, color=as.factor(isSingle))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#fcba03','white'), name = "is Single?", labels = c("No", "Yes"))
+
+
+a2b <- ggplot(df_train_sub1, aes(x=song_popularity, y=primary_artist_followers, color=as.factor(hasFeature))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#fcba03','white'), name = "Has feature?", labels = c("No", "Yes"))
+
+
+a2c <- ggplot(df_train_sub1, aes(x=song_popularity, y=primary_artist_followers, color=as.factor(explicit))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#fcba03','white'), name = "is Explicit?", labels = c("No", "Yes"))
+
+
+a2d <- ggplot(df_train_sub1, aes(x=song_popularity, y=primary_artist_followers, color=as.factor(mode))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#fcba03','white'), name = "Mode")
+
+
+k <- ggplot(df_train_sub1, aes(x=primary_artist_followers)) +
+  geom_histogram(fill="greenyellow",color="black", size=0.25) +
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 10)) +
+  plot_theme1
+
+a2e <- ggplot(df_train_sub1, aes(x=song_popularity, y=primary_artist_followers)) + geom_hex() + plot_theme2 +
+              scale_fill_gradient(limits=c(0,2000), breaks=seq(0, 5000, by=1000), low = "#575757", high = "#fcba03")
+
+
+ggp <- ggarrange(a2e, ggarrange(a2a, a2b, a2c, a2d, align = "h", ncol = 2, nrow = 2) , align = "h", ncol = 1, nrow =2)
+ggsave("plot4-2.png", plot = ggp, width = 8, height = 12, bg = "transparent")
+
+```
+
+
+# DANCEABILITY
+```{r 4.3}
+a3a <- ggplot(df_train, aes(x=song_popularity, y=danceability, color=as.factor(isSingle))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#ff00aa','white'), name = "is Single?", labels = c("No", "Yes"))
+
+
+a3b <- ggplot(df_train, aes(x=song_popularity, y=danceability, color=as.factor(hasFeature))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#ff00aa','white'), name = "Has feature?", labels = c("No", "Yes"))
+
+
+a3c <- ggplot(df_train, aes(x=song_popularity, y=danceability, color=as.factor(explicit))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#ff00aa','white'), name = "is Explicit?", labels = c("No", "Yes"))
+
+
+a3d <- ggplot(df_train, aes(x=song_popularity, y=danceability, color=as.factor(mode))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#ff00aa','white'), name = "Mode")
+
+
+a3e <- ggplot(df_train, aes(x=song_popularity, y=danceability)) + geom_hex() + plot_theme2 +
+              scale_fill_gradient(limits=c(0,600), breaks=seq(0, 500, by=100), low = "#575757", high = "#ff00aa")
+
+
+ggp <- ggarrange(a3e, ggarrange(a3a, a3b, a3c, a3d, align = "h", ncol = 2, nrow = 2) , align = "h", ncol = 1, nrow =2)
+ggsave("plot4-3.png", plot = ggp, width = 8, height = 12, bg = "transparent")
+
+
+```
+
+
+# DURATION
+```{r 4.4}
+
+# CLIP LONG SONGS
+df_train_sub2 <- subset(df_train, duration_ms < 1000000)
+a4a <- ggplot(df_train_sub2, aes(x=song_popularity, y=duration_ms, color=as.factor(isSingle))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#c861ff','white'), name = "is Single?", labels = c("No", "Yes"))
+
+
+a4b <- ggplot(df_train_sub2, aes(x=song_popularity, y=duration_ms, color=as.factor(hasFeature))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#c861ff','white'), name = "Has feature?", labels = c("No", "Yes"))
+
+
+a4c <- ggplot(df_train_sub2, aes(x=song_popularity, y=duration_ms, color=as.factor(explicit))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#c861ff','white'), name = "is Explicit?", labels = c("No", "Yes"))
+
+
+a4d <- ggplot(df_train_sub2, aes(x=song_popularity, y=duration_ms, color=as.factor(mode))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#c861ff','white'), name = "Mode")
+
+
+a4e <- ggplot(df_train_sub2, aes(x=song_popularity, y=duration_ms)) + geom_hex() + plot_theme2 +
+              scale_fill_gradient(limits=c(0,1500), breaks=seq(0, 1500, by=500), low = "#575757", high = "#c861ff")
+
+
+ggp <- ggarrange(a4e, ggarrange(a4a, a4b, a4c, a4d, align = "h", ncol = 2, nrow = 2) , align = "h", ncol = 1, nrow =2)
+ggsave("plot4-4.png", plot = ggp, width = 8, height = 12, bg = "transparent")
+```
+
+
+# LOUDNESS
+```{r 4.5}
+a8a <- ggplot(df_train, aes(x=song_popularity, y=loudness, color=as.factor(isSingle))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#fcba03','white'), name = "is Single?", labels = c("No", "Yes"))
+
+
+a8b <- ggplot(df_train, aes(x=song_popularity, y=loudness, color=as.factor(hasFeature))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#fcba03','white'), name = "Has feature?", labels = c("No", "Yes"))
+
+
+a8c <- ggplot(df_train, aes(x=song_popularity, y=loudness, color=as.factor(explicit))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#fcba03','white'), name = "is Explicit?", labels = c("No", "Yes"))
+
+
+a8d <- ggplot(df_train, aes(x=song_popularity, y=loudness, color=as.factor(mode))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#fcba03','white'), name = "Mode")
+
+
+a8e <- ggplot(df_train, aes(x=song_popularity, y=loudness)) + geom_hex() + plot_theme2 +
+              scale_fill_gradient(limits=c(0,1500), breaks=seq(0, 1500, by=500), low = "#575757", high = "#fcba03")
+
+
+ggp <- ggarrange(a8e, ggarrange(a8a, a8b, a8c, a8d, align = "h", ncol = 2, nrow = 2) , align = "h", ncol = 1, nrow =2)
+ggsave("plot4-5.png", plot = ggp, width = 8, height = 12, bg = "transparent")
+
+
+
+```
+
+
+# LIVENESS
+```{r 4.6}
+a9a <- ggplot(df_train, aes(x=song_popularity, y=liveness, color=as.factor(isSingle))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#bbff00','white'), name = "is Single?", labels = c("No", "Yes"))
+
+
+a9b <- ggplot(df_train, aes(x=song_popularity, y=liveness, color=as.factor(hasFeature))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#bbff00','white'), name = "Has feature?", labels = c("No", "Yes"))
+
+
+a9c <- ggplot(df_train, aes(x=song_popularity, y=liveness, color=as.factor(explicit))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#bbff00','white'), name = "is Explicit?", labels = c("No", "Yes"))
+
+
+a9d <- ggplot(df_train, aes(x=song_popularity, y=liveness, color=as.factor(mode))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#bbff00','white'), name = "Mode")
+
+
+a9e <- ggplot(df_train, aes(x=song_popularity, y=liveness)) + geom_hex() + plot_theme2+
+              scale_fill_gradient(limits=c(0,2000), breaks=seq(0, 2000, by=500), low = "#575757", high = "#bbff00")
+
+
+ggp <- ggarrange(a9e, ggarrange(a9a, a9b, a9c, a9d, align = "h", ncol = 2, nrow = 2) , align = "h", ncol = 1, nrow =2)
+ggsave("plot4-6.png", plot = ggp, width = 8, height = 12, bg = "transparent")
+
+```
+
+
+# ENERGY
+```{r 4.7}
+a10a <- ggplot(df_train, aes(x=song_popularity, y=energy, color=as.factor(isSingle))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#bbff00','white'), name = "is Single?", labels = c("No", "Yes"))
+
+
+a10b <- ggplot(df_train, aes(x=song_popularity, y=energy, color=as.factor(hasFeature))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#bbff00','white'), name = "Has feature?", labels = c("No", "Yes"))
+
+
+a10c <- ggplot(df_train, aes(x=song_popularity, y=energy, color=as.factor(explicit))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#bbff00','white'), name = "is Explicit?", labels = c("No", "Yes"))
+
+
+a10d <- ggplot(df_train, aes(x=song_popularity, y=energy, color=as.factor(mode))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#bbff00','white'), name = "Mode")
+
+
+a10e <- ggplot(df_train, aes(x=song_popularity, y=energy)) + geom_hex() + plot_theme2 +
+              scale_fill_gradient(limits=c(0,370), breaks=seq(0, 350, by=100), low = "#575757", high = "#bbff00")
+
+ggp <- ggarrange(a10e, ggarrange(a10a, a10b, a10c, a10d, align = "h", ncol = 2, nrow = 2) , align = "h", ncol = 1, nrow =2)
+ggsave("plot4-7.png", plot = ggp, width = 8, height = 12, bg = "transparent")
+
+```
+
+
+# TEMPO
+```{r 4.8}
+a12a <- ggplot(df_train, aes(x=song_popularity, y=tempo, color=as.factor(isSingle))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#ff7ddc','white'), name = "is Single?", labels = c("No", "Yes"))
+
+
+a12b <- ggplot(df_train, aes(x=song_popularity, y=tempo, color=as.factor(hasFeature))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#ff7ddc','white'), name = "Has feature?", labels = c("No", "Yes"))
+
+
+a12c <- ggplot(df_train, aes(x=song_popularity, y=tempo, color=as.factor(explicit))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#ff7ddc','white'), name = "is Explicit?", labels = c("No", "Yes"))
+
+
+a12d <- ggplot(df_train, aes(x=song_popularity, y=tempo, color=as.factor(mode))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#ff7ddc','white'), name = "Mode")
+
+
+a12e <- ggplot(df_train, aes(x=song_popularity, y=tempo)) + geom_hex() + plot_theme2 +
+              scale_fill_gradient(limits=c(0,800), breaks=seq(0, 800, by=200), low = "#575757", high = "#ff7ddc")
+
+ggp <- ggarrange(a12e, ggarrange(a12a, a12b, a12c, a12d, align = "h", ncol = 2, nrow = 2) , align = "h", ncol = 1, nrow =2)
+ggsave("plot4-8.png", plot = ggp, width = 8, height = 12, bg = "transparent")
+
+
+```
+
+
+# SPEECHINESS
+```{r 4.9}
+a13a <- ggplot(df_train, aes(x=song_popularity, y=speechiness, color=as.factor(isSingle))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#bbff00','white'), name = "is Single?", labels = c("No", "Yes"))
+
+
+a13b <- ggplot(df_train, aes(x=song_popularity, y=speechiness, color=as.factor(hasFeature))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#bbff00','white'), name = "Has feature?", labels = c("No", "Yes"))
+
+
+a13c <- ggplot(df_train, aes(x=song_popularity, y=speechiness, color=as.factor(explicit))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#bbff00','white'), name = "is Explicit?", labels = c("No", "Yes"))
+
+
+a13d <- ggplot(df_train, aes(x=song_popularity, y=speechiness, color=as.factor(mode))) +
+  geom_point(size=1, alpha=0.9) + plot_theme1 +
+  scale_color_manual(values=c('#bbff00','white'), name = "Mode")
+
+
+a13e <- ggplot(df_train, aes(x=song_popularity, y=speechiness)) + geom_hex() + plot_theme2 +
+              scale_fill_gradient(limits=c(0,4000), breaks=seq(0, 4000, by=1000), low = "#575757", high = "#bbff00")
+
+ggp <- ggarrange(a13e, ggarrange(a13a, a13b, a13c, a13d, align = "h", ncol = 2, nrow = 2) , align = "h", ncol = 1, nrow =2)
+ggsave("plot4-9.png", plot = ggp, width = 8, height = 12, bg = "transparent")
+
+```
+
+
+

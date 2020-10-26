@@ -1,0 +1,178 @@
+---
+title: "Project Part 1: Part 2 - Prediction"
+output: pdf_document
+author: "Savannah McCoy"
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggpubr)
+library(dbplyr)
+library(doBy)
+library(extrafont)
+library(ggplot2)
+library(reshape2)
+library(hexbin)
+library(tibble)
+library(dplyr)
+library(cvTools)
+library(glmnet)
+
+```
+
+
+## Project Part 2 - Prediction
+
+
+# MODIFYING POPULARITY BINARY VARIABLE
+```{r 0}
+
+df <- read.csv("final_new_data.csv", sep=',')
+df$is_popular <- ifelse(df$song_popularity >= 70, 1, 0)
+
+df_pop <- subset(df, is_popular == 1) # 4541/139606 = 0.032527 = 3.25%
+
+```
+
+
+# SPLITTING DATA
+```{r 1}
+
+smp_size <- floor(0.716305 * nrow(df))
+train_ind <- sample(seq_len(nrow(df)), size = smp_size)
+
+df_train <- df[train_ind, ]
+df_test <- df[-train_ind, ]
+
+```
+
+
+# GENERATING LINEAR REGRESSION MODEL 1
+```{r 2}
+n = 100000
+X <- df_train$song_popularity
+Y <- 1 + X + rnorm(n, 0, 0.5)
+
+lm1 <- lm(formula = Y ~ 1 + X)
+print(summary(lm1))
+
+png(file="plot0-1.png",
+width=600, height=350)
+par(mfrow = c(2, 2))  # Split the plotting panel into a 2 x 2 grid
+plot(lm1)
+dev.off()
+```
+
+
+# GENERATING LINEAR REGRESSION MODEL 2
+```{r 3}
+
+normalize <- function(x) {
+return ((x - min(x)) / (max(x) - min(x)))
+}
+
+myvars <- c("song_popularity", "primary_artist_popularity", "primary_artist_followers", 
+                              "instrumentalness", "speechiness", "duration_ms", "danceability", 
+                              "loudness", "liveness" , "energy", "tempo", "year", "explicit", 
+                              "isSingle", "is_popular")
+
+d <- df_train2[myvars]
+df_train_norm <- normalize(d)
+
+form.str = "song_popularity ~ primary_artist_popularity + primary_artist_followers +
+                              instrumentalness + speechiness + duration_ms + danceability +
+                              loudness + liveness + energy + tempo + year + explicit + isSingle"
+
+form = as.formula(form.str)
+
+
+# fit linear model
+lm3 <- lm(form, data=df_train_norm )
+cv10 <- cvFit(lm3, data=df_train_norm , y=df_train_norm $song_popularity, K = 10)
+cv10
+print(summary(lm3))
+
+
+png(file="plot0-2.png",
+width=600, height=350)
+par(mfrow = c(2, 2))  # Split the plotting panel into a 2 x 2 grid
+plot(lm3)
+dev.off()
+
+```
+
+
+
+# GENERATING LINEAR REGRESSION MODEL 3
+```{r 4}
+form.str = "song_popularity ~ primary_artist_popularity + danceability + loudness + energy + year"
+form = as.formula(form.str)
+
+lm4 <- lm(form, data=df_train_norm)
+cv10 <- cvFit(lm3, data=df_train_norm, y=df_train_norm$song_popularity, K = 10)
+cv10
+print(summary(lm4))
+
+par(mfrow = c(2, 2))  # Split the plotting panel into a 2 x 2 grid
+plot(lm4) + plot_theme
+
+```
+
+
+
+
+# GENERATING CLASSIFICATION MODEL 1
+```{r 5}
+
+#fitting a logistic regression model
+classifier <- glm(is_popular ~ primary_artist_popularity + danceability + loudness + energy + year + explicit, 
+                  family='binomial', data=df_train)
+summary(classifier)
+exp(coef(classifier))
+```
+
+
+
+# GENERATING CLASSIFICATION MODEL 2
+```{r 5}
+
+y <- df_train_norm$is_popular
+x <- df_train_norm %>% select(primary_artist_popularity, danceability, loudness, energy, year, explicit) %>% data.matrix()
+classifier2 <- glmnet(x, y=y, alpha=1, family="binomial")
+
+# generating and saving plot
+png(file="plot0-3.png",
+width=600, height=350)
+plot(classifier2, xvar="lambda") # Plot variable coefficients vs. shrinkage parameter lambda
+dev.off()
+
+```
+
+
+# GENERATING CLASSIFICATION MODEL 3
+```{r 6}
+
+# using cross validation
+cv.glmmod <- cv.glmnet(x, y=y, alpha=1)
+
+# generating and saving plot
+png(file="plot0-4.png",
+width=600, height=350)
+plot(cv.glmmod)
+dev.off()
+
+# print the best lambda
+print(cv.glmmod$lambda.min)
+
+```
+
+
+
+
+
+
+
+
+
